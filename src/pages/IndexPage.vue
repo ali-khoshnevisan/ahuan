@@ -2,6 +2,7 @@
   <div class="table-container">
     <q-table :rows="rows"
              :columns="columns"
+             :loading="loading"
              row-key="name">
       <template v-slot:top>
         <q-btn color="positive" :disable="loading" label="Add Product" icon="add" @click="addProduct" />
@@ -19,7 +20,7 @@
             dense
             color="primary"
             icon="edit"
-            @click="editProduct(props.row)"
+            @click="editProduct(props.row.Id)"
           />
           <q-btn
             flat
@@ -41,27 +42,27 @@
         <q-card-section>
           <q-btn flat icon="close" @click="dialog=false" />
           <span>
-            ویرایش محصول
+            {{editMode ? 'ویرایش محصول' : 'اضافه کردن محصول'}}
           </span>
         </q-card-section>
         <q-card-section>
           <div class="row q-col-gutter-md">
             <div class="col-12">
-              <q-input label="title" outlined v-model="title" />
+              <q-input label="title" outlined v-model="title" :loading="loading" />
             </div>
             <div class="col-12">
-              <q-input label="description" outlined v-model="description" />
+              <q-input label="description" outlined v-model="description" :loading="loading" />
             </div>
             <div class="col-12">
-              <q-input label="price" outlined v-model="price" />
+              <q-input label="price" outlined v-model="price" :loading="loading" />
             </div>
             <div class="col-12">
-              <q-input label="image" outlined v-model="image" />
+              <q-input label="image" outlined v-model="image" :loading="loading" />
             </div>
           </div>
         </q-card-section>
         <q-card-section>
-          <q-btn label="submit" color="primary" />
+          <q-btn :label="editMode ? 'update' : 'add'" :icon-right="editMode ? 'edit' : 'add'" :disable="loading" color="primary" @click="submitForm" />
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -77,10 +78,13 @@ export default defineComponent({
   data () {
     return{
       dialog: false,
+      editMode: false,
       title: '',
       description: '',
       price: 0,
       image: '',
+      productId: 0,
+      loading: false,
       columns: [
         {name: 'Title', required: true, label: 'Title' , align: 'center', field: 'Title'},
         {name: 'Description', required: true, label: 'Description' , align: 'center', field: 'Description'},
@@ -97,7 +101,49 @@ export default defineComponent({
     this.getData()
   },
   methods: {
+    submitForm() {
+      const data = {
+        Title: this.title,
+        Description: this.description,
+        Price: this.price,
+        Image: this.image,
+        C_OR_R: 'T',
+        Category: 'test'
+      }
+      if (this.editMode) {
+        this.$api.put(`foods?id=${this.productId}`, data)
+          .then(() => {
+            Notify.create({
+              message: 'محصول با موفقیت ویرایش شد',
+              duration: 1000,
+              position: 'top',
+              type: 'positive'
+            })
+            this.getData()
+            this.dialog = false
+          })
+          .catch(() => {
+            this.dialog = false
+          })
+      } else {
+        this.$api.post('foods', data)
+          .then(() => {
+            Notify.create({
+              message: 'محصول با موفقیت اضافه شد',
+              duration: 1000,
+              position: 'top',
+              type: 'positive'
+            })
+            this.getData()
+            this.dialog = false
+          })
+          .catch(() => {
+            this.dialog = false
+          })
+      }
+    },
     getData() {
+      this.loading = true
       this.$api.get('foods', {
         params: {
           type: 'T',
@@ -105,28 +151,51 @@ export default defineComponent({
         }
       })
         .then(res => {
+          this.loading = false
           this.rows = res.data;
         })
         .catch(err => {
-          console.log(err);
+          this.loading = false
+          console.error(err);
+        })
+    },
+    getProductWithId (id) {
+      this.$api.get('foods?id=' + id)
+        .then(res => {
+          this.loading = false
+          this.title = res.data.Title
+          this.description = res.data.Description
+          this.price = res.data.Price
+          this.image = res.data.Image
+        })
+        .catch(() => {
+          this.loading = false
         })
     },
     addProduct () {
-
+      this.editMode = false
+      this.dialog = true
+      this.title = ''
+      this.description = ''
+      this.price = ''
+      this.image = ''
     },
-    editProduct (product) {
-      this.dialog = true;
-      this.title = product.Title;
-      this.description = product.Description;
-      this.price = product.Price;
+    editProduct (productId) {
+      this.editMode = true
+      this.loading = true
+      this.dialog = true
+      this.productId = productId
+      this.getProductWithId(productId)
     },
     deleteProduct (productId) {
+      this.loading = true
       this.$api.delete('foods', {
         params: {
           id: productId
         }
       })
         .then(() => {
+          this.loading = false
           this.getData()
           Notify.create({
             message: 'محصول با موفقیت حذف شد',
@@ -136,6 +205,7 @@ export default defineComponent({
           })
         })
         .catch(() => {
+          this.loading = false
           Notify.create({
             message: 'مشکلی به وجود آمده است',
             duration: 1000,
